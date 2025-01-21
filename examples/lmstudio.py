@@ -4,66 +4,87 @@ Make sure you have LMStudio running locally with the API server enabled.
 """
 
 import asyncio
-from browser_use import Browser, BrowserConfig, Agent
+import time
+from browser_use import Agent, Browser, BrowserConfig
 from browser_use.llms import LMStudioLLM
 import logging
 import os
 
 # Enable debug logging to see what's happening
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+async def sleep_with_message(seconds: int, message: str):
+    print(f"\n{'='*50}")
+    print(f"{message}")
+    print(f"Waiting {seconds} seconds...")
+    print("=" * 50)
+    await asyncio.sleep(seconds)
+
+
 async def main():
+    print("\n=== Starting Process ===")
+    await sleep_with_message(1, "Initializing process...")
+
     # Initialize LMStudio client
-    # You can customize these parameters in your .env file
+    print("\n=== LMStudio Initialization ===")
+    browser_config = BrowserConfig(
+        headless=False, disable_security=True  # הפעלת הדפדפן במצב גלוי
+    )
+
+    browser = Browser(config=browser_config)
+
     llm = LMStudioLLM(
         temperature=0.7,
         max_tokens=512,
-        context_length=int(os.getenv("LMSTUDIO_CONTEXT_LENGTH", "8192"))
+        context_length=int(os.getenv("LMSTUDIO_CONTEXT_LENGTH", "8192")),
+        browser=browser,
     )
-    
-    # Initialize browser with headless=False to see what's happening
-    browser = Browser(
-        config=BrowserConfig(
-            headless=False,  # Set to True in production
-            disable_security=True  # Needed for some websites
-        )
-    )
-    
+    await sleep_with_message(1, "LMStudio initialized successfully")
+
     try:
-        # Example 1: Simple browsing
-        print("\n=== Example 1: Simple Browsing ===")
+        print("\n=== Creating Agent ===")
         agent = Agent(
-            task="Go to google.com and tell me what you see",
+            task="Go to example.com and tell me what you see",
             llm=llm,
-            browser=browser,
-            validate_output=False,  # Disable output validation for now
-            max_failures=1  # Reduce max failures to see error faster
+            max_failures=1,
         )
+        await sleep_with_message(0, "Agent created successfully")
+
         try:
-            result = await agent.run()
-            logger.debug(f"Agent result type: {type(result)}")
-            logger.debug(f"Agent result attributes: {dir(result)}")
-            logger.debug(f"Agent result: {result}")
-            
+            print("\n=== Starting Task Execution ===")
+            result = await agent.run(max_steps=3)
+
             if result and result.history:
-                for step in result.history:
-                    logger.debug(f"Step: {step}")
-                    if hasattr(step, 'output'):
-                        print(f"Step output: {step.output}")
-                    if hasattr(step, 'error'):
-                        print(f"Step error: {step.error}")
-                
+                print("\n=== Execution Steps ===")
+                for i, step in enumerate(result.history, 1):
+                    print(f"\nStep {i}:")
+                    print("-" * 30)
+                    if hasattr(step, "output"):
+                        print(f"Output: {step.output}")
+                    if hasattr(step, "error"):
+                        print(f"Error: {step.error}")
+                    await asyncio.sleep(0)  # השהייה כדי לראות את התהליך
+
                 final_result = result.final_result()
                 if final_result:
-                    print(f"Final result: {final_result}")
-                    
+                    print("\n=== Final Result ===")
+                    print(f"{final_result}")
+
         except Exception as e:
-            logger.error(f"Error running agent: {str(e)}", exc_info=True)
-            
+            print("\n=== Error! ===")
+            logger.error(f"Error running Agent: {str(e)}", exc_info=True)
+
     finally:
-        # Always close the browser when done
-        await browser.close()
+        print("\n=== Process Complete ===")
+        await sleep_with_message(1, "Process finished")
+
+        # משאיר את הדפדפן פתוח כדי שתוכל לראות את התהליך
+        print("\n=== Browser is still open, press Enter to close ===")
+        input()
+        await browser.close()  # סגירה ידנית לאחר צפייה
+
 
 if __name__ == "__main__":
     asyncio.run(main())
