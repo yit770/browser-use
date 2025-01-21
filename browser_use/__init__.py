@@ -11,6 +11,7 @@ from browser_use.browser.browser import Browser as Browser
 from browser_use.browser.browser import BrowserConfig as BrowserConfig
 from browser_use.controller.service import Controller as Controller
 from browser_use.dom.service import DomService as DomService
+from browser_use.llms import LMStudioLLM
 
 __all__ = [
 	'Agent',
@@ -22,4 +23,5 @@ __all__ = [
 	'ActionResult',
 	'ActionModel',
 	'AgentHistoryList',
+	'LMStudioLLM',
 ]

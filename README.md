@@ -74,6 +74,29 @@ uv pip install gradio
 python examples/gradio.py
 ```
 
+### Using with LMStudio
+
+Make sure you have LMStudio running locally with the API server enabled. Then you can use it like this:
+
+```python
+from browser_use import Browser
+from browser_use.llms import LMStudioLLM
+
+# Initialize LMStudio client
+llm = LMStudioLLM(
+    base_url="http://localhost:1234/v1",  # Default LMStudio API endpoint
+    temperature=0.7,
+    max_tokens=512
+)
+
+# Initialize Browser with LMStudio
+browser = Browser(llm=llm)
+
+# Use it like any other model
+response = await browser.browse("https://example.com")
+print(response)
+```
+
 # Demos
 
 [Prompt](https://github.com/browser-use/browser-use/blob/main/examples/real_browser.py): Write a letter in Google Docs to my Papa, thanking him for everything, and save the document as a PDF.
