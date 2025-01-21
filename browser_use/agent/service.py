@@ -19,6 +19,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
 	BaseMessage,
 	SystemMessage,
+	AIMessage,
 )
 from lmnr import observe
 from openai import RateLimitError
@@ -219,7 +220,7 @@ class Agent:
 			self.message_manager.add_state_message(state, self._last_result, step_info)
 			input_messages = self.message_manager.get_messages()
 			try:
-				model_output = await self.get_next_action(input_messages)
+				model_output = await self.get_next_action(self.history)
 				self._save_conversation(input_messages, model_output)
 				self.message_manager._remove_last_state_message()  # we dont want the whole state in the chat history
 				self.message_manager.add_model_output(model_output)
@@ -306,6 +307,10 @@ class Agent:
 			tabs=state.tabs,
 			interacted_element=interacted_elements,
 			screenshot=state.screenshot,
+			element_tree=state.element_tree,
+			selector_map=state.selector_map,
+			pixels_above=state.pixels_above,
+			pixels_below=state.pixels_below
 		)
 
 		history_item = AgentHistory(model_output=model_output, result=result, state=state_history)
@@ -313,25 +318,54 @@ class Agent:
 		self.history.history.append(history_item)
 
 	@time_execution_async('--get_next_action')
-	async def get_next_action(self, input_messages: list[BaseMessage]) -> AgentOutput:
+	async def get_next_action(self, history: AgentHistoryList) -> AgentOutput:
 		"""Get next action from LLM based on current state"""
-		if self.tool_calling_method is None:
-			structured_llm = self.llm.with_structured_output(self.AgentOutput, include_raw=True)
-		else:
-			structured_llm = self.llm.with_structured_output(self.AgentOutput, include_raw=True, method=self.tool_calling_method)
+		try:
+			logger.debug("Getting next action from LLM")
+			
+			# Create input messages from history
+			if history.history:
+				current_state = history.history[-1].state
+			else:
+				current_state = await self.browser_context.get_state(use_vision=self.use_vision)
+			
+			self.message_manager.add_state_message(current_state, self._last_result, None)
+			input_messages = self.message_manager.get_messages()
+			logger.debug(f"Input messages: {input_messages}")
+			
+			if self.tool_calling_method is None:
+				structured_llm = self.llm.with_structured_output(self.AgentOutput)
+			else:
+				structured_llm = self.llm.with_structured_output(self.AgentOutput, method=self.tool_calling_method)
 
-		response: dict[str, Any] = await structured_llm.ainvoke(input_messages)  # type: ignore
+			response = await structured_llm.ainvoke(input_messages)  # type: ignore
+			if isinstance(response, AIMessage):
+				if hasattr(response, 'additional_kwargs') and 'parsed' in response.additional_kwargs:
+					parsed_dict = response.additional_kwargs['parsed']
+					if isinstance(parsed_dict, dict):
+						parsed = self.AgentOutput(**parsed_dict)
+					else:
+						raise ValueError(f"Parsed output is not a dictionary: {parsed_dict}")
+				else:
+					raise ValueError("Response does not contain parsed output")
+			else:
+				raise ValueError(f"Unexpected response type: {type(response)}")
+			
+			logger.debug(f"Parsed output: {parsed}")
 
-		parsed: AgentOutput = response['parsed']
-		if parsed is None:
-			raise ValueError('Could not parse response.')
+			# cut the number of actions to max_actions_per_step
+			parsed.action = parsed.action[: self.max_actions_per_step]
+			self._log_response(parsed)
+			self.n_steps += 1
 
-		# cut the number of actions to max_actions_per_step
-		parsed.action = parsed.action[: self.max_actions_per_step]
-		self._log_response(parsed)
-		self.n_steps += 1
+			# Remove the state message since we don't want it in the chat history
+			self.message_manager._remove_last_state_message()
 
-		return parsed
+			return parsed
+
+		except Exception as e:
+			logger.error(f"Error getting next action: {str(e)}", exc_info=True)
+			raise
 
 	def _log_response(self, response: AgentOutput) -> None:
 		"""Log the model's response"""
@@ -942,7 +976,7 @@ class Agent:
 		if os.path.exists(logo_path):
 			logo = Image.open(logo_path)
 			logo.thumbnail((logo_size, logo_size))
-			frame.paste(logo, (width - logo_size - 20, 20), logo if 'A' in logo.getbands() else None)
+			frame.paste(logo, (width - logo_size - 20, 20), logo if logo.mode == 'RGBA' else None)
 
 		# Create drawing context
 		draw = ImageDraw.Draw(frame)
@@ -988,7 +1022,7 @@ class Agent:
 			frame.paste(
 				small_logo,
 				(margin - text_padding + 10, 45),  # Positioned inside goal box
-				small_logo if 'A' in small_logo.getbands() else None,
+				small_logo if small_logo.mode == 'RGBA' else None,
 			)
 
 		# Draw text with proper wrapping

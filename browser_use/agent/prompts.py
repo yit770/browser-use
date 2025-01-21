@@ -1,3 +1,65 @@
+"""Agent prompts module."""
+
+from __future__ import annotations
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, Field, ConfigDict
+
+class AgentBrain(BaseModel):
+    """Agent brain schema."""
+    evaluation_previous_goal: Optional[str] = Field(
+        None,
+        description="Analyze the current elements and the image to check if the previous goals/actions are successful",
+        validation_alias="evaluation_previous_Goal"
+    )
+    memory: Optional[str] = Field(
+        None,
+        description="Description of what has been done and what you need to remember"
+    )
+    next_goal: Optional[str] = Field(
+        None,
+        description="What needs to be done with the next actions",
+        validation_alias="next_Goal"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        validate_default=False,
+        extra="allow",
+        validate_assignment=True,
+        case_sensitive=False
+    )
+
+class ActionModel(BaseModel):
+    """Action model schema."""
+    action_name: str = Field(
+        ...,
+        description="Name of the action to take"
+    )
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameters for the action"
+    )
+
+class AgentOutput(BaseModel):
+    """Agent output schema."""
+    current_state: Optional[AgentBrain] = Field(
+        None,
+        description="Current state of the browser, if known"
+    )
+    action: List[ActionModel] = Field(
+        ...,
+        description="List of actions to take. Each action should be a dictionary with an action name and parameters"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        validate_default=False,
+        extra="allow",
+        validate_assignment=True,
+        case_sensitive=False
+    )
+
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -27,7 +89,8 @@ class SystemPrompt:
      },
      "action": [
        {
-         "one_action_name": {
+         "action_name": "action_name",
+         "parameters": {
            // action-specific parameter
          }
        },
@@ -39,14 +102,14 @@ class SystemPrompt:
 
    Common action sequences:
    - Form filling: [
-       {"input_text": {"index": 1, "text": "username"}},
-       {"input_text": {"index": 2, "text": "password"}},
-       {"click_element": {"index": 3}}
+       {"action_name": "input_text", "parameters": {"index": 1, "text": "username"}},
+       {"action_name": "input_text", "parameters": {"index": 2, "text": "password"}},
+       {"action_name": "click_element", "parameters": {"index": 3}}
      ]
    - Navigation and extraction: [
-       {"open_new_tab": {}},
-       {"go_to_url": {"url": "https://example.com"}},
-       {"extract_page_content": {}}
+       {"action_name": "open_new_tab", "parameters": {}},
+       {"action_name": "go_to_url", "parameters": {"url": "https://example.com"}},
+       {"action_name": "extract_page_content", "parameters": {}}
      ]
 
 
