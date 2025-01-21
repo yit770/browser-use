@@ -129,7 +129,8 @@ class LMStudioLLM(BaseChatModel):
             prompt += '  ]\n'
             prompt += "}\n\n"
             prompt += "IMPORTANT: Your response must start with '{' and end with '}' and be valid JSON!\n"
-            prompt += "IMPORTANT: The 'current_state' object must include ALL fields: evaluation_previous_goal, memory, and next_goal!\n\n"
+            prompt += "IMPORTANT: The field names are case-sensitive! Use exactly: evaluation_previous_goal, memory, next_goal\n"
+            prompt += "IMPORTANT: The 'current_state' object must include ALL fields!\n\n"
         
         # Only use the last message to keep the prompt short
         if messages:
@@ -214,9 +215,23 @@ class LMStudioLLM(BaseChatModel):
                     else:
                         raise json.JSONDecodeError("No JSON object found", response_text, 0)
                 
+                # Clean up the response text
+                response_text = response_text.strip()
+                response_text = response_text.replace('\n', '')
+                response_text = response_text.replace('\r', '')
+                response_text = response_text.replace('\t', '')
+                
                 parsed = json.loads(response_text)
                 if not isinstance(parsed, dict):
                     raise ValueError(f"Parsed response is not a dictionary: {parsed}")
+                
+                # Fix case sensitivity issues
+                if "current_state" in parsed and isinstance(parsed["current_state"], dict):
+                    current_state = parsed["current_state"]
+                    if "evaluation_previous_Goal" in current_state:
+                        current_state["evaluation_previous_goal"] = current_state.pop("evaluation_previous_Goal")
+                    if "next_Goal" in current_state:
+                        current_state["next_goal"] = current_state.pop("next_Goal")
                 
                 # Validate required fields
                 if self._output_schema is not None:

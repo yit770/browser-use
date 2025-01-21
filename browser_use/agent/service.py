@@ -369,16 +369,21 @@ class Agent:
 
 	def _log_response(self, response: AgentOutput) -> None:
 		"""Log the model's response"""
-		if 'Success' in response.current_state.evaluation_previous_goal:
-			emoji = '👍'
-		elif 'Failed' in response.current_state.evaluation_previous_goal:
-			emoji = '⚠'
-		else:
-			emoji = '🤷'
+		if response.current_state and response.current_state.evaluation_previous_goal:
+			if 'Success' in response.current_state.evaluation_previous_goal:
+				emoji = '👍'
+			elif 'Failed' in response.current_state.evaluation_previous_goal:
+				emoji = '⚠'
+			else:
+				emoji = '🤷'
+			logger.info(f'{emoji} Eval: {response.current_state.evaluation_previous_goal}')
 
-		logger.info(f'{emoji} Eval: {response.current_state.evaluation_previous_goal}')
-		logger.info(f'🧠 Memory: {response.current_state.memory}')
-		logger.info(f'🎯 Next goal: {response.current_state.next_goal}')
+		if response.current_state and response.current_state.memory:
+			logger.info(f'🧠 Memory: {response.current_state.memory}')
+
+		if response.current_state and response.current_state.next_goal:
+			logger.info(f'🎯 Next goal: {response.current_state.next_goal}')
+
 		for i, action in enumerate(response.action):
 			logger.info(f'🛠️  Action {i + 1}/{len(response.action)}: {action.model_dump_json(exclude_unset=True)}')
 
